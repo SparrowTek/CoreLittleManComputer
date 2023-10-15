@@ -3,7 +3,7 @@ import SwiftUI
 public typealias Register = Int
 
 public struct Program {
-    public var programCounter: Int = 0
+    public var counter: Int = 0
     public var inbox: Int?
     public var outbox: [Int] = []
     public var accumulator: Int = 0
