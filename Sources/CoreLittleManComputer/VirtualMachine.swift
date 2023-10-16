@@ -1,3 +1,4 @@
+import SwiftData
 
 public typealias Mailbox = Int
 
@@ -7,9 +8,12 @@ public enum VirtualMachineError: Error {
     case generic
 }
 
+@Observable
 public class VirtualMachine {
     var program: Program
     var input: Int?
+    var halt = false
+    var error: VirtualMachineError?
     
     init(program: Program) {
         self.program = program
@@ -22,23 +26,22 @@ public class VirtualMachine {
             resetRegistersCurrentlyBeingEvaluated()
             try execute(instruction: instruction, for: &program)
             programShouldCompleteCheck(register: register)
-            //        } catch let error as StateError {
-            //            state.send(completion: .failure(error))
-            //        } catch {
-            //            state.send(completion: .failure(.generic))
-            //        }
-        } catch { }
+        } catch let error as VirtualMachineError {
+            self.error = error
+        } catch {
+            self.error = .generic
+        }
     }
     
-    func run(speed: Double) {
-        
+    func run(speed: UInt64) async throws {
+        repeat {
+            step()
+            try await Task.sleep(nanoseconds: (speed * 1_000_000_000))
+        } while !halt
     }
     
     private func programShouldCompleteCheck(register: Register) {
-        if opcode(for: register) == .halt {
-//            state.send(completion: .finished)
-            // TODO: end async stream
-        }
+        halt = opcode(for: register) == .halt
     }
     
     private func execute(instruction: Instruction, for program: inout Program) throws {
