@@ -33,10 +33,20 @@ public class VirtualMachine {
         }
     }
     
-    func run(speed: UInt64) async throws {
+    func run(speed: Double) async throws {
+        let decimal = Int(speed.truncatingRemainder(dividingBy: 1))
+        let integer = Int(speed)
+        
+        let nanoseconds = if decimal == 0 {
+            UInt64(integer * 1_000_000_000)
+        } else {
+            UInt64((integer * 1_000_000_000) / decimal)
+        }
+        
         repeat {
             step()
-            try await Task.sleep(nanoseconds: (speed * 1_000_000_000))
+            
+            try await Task.sleep(nanoseconds: nanoseconds)
         } while !halt
     }
     
