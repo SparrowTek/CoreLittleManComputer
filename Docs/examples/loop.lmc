@@ -1,0 +1,9 @@
+; Countdown loop demonstrating BRP and STA
+LOOP LDA COUNT
+OUT
+SUB ONE
+STA COUNT
+BRP LOOP
+HLT
+COUNT DAT 2
+ONE DAT 1
