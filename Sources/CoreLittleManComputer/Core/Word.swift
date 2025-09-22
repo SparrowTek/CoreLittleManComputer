@@ -1,4 +1,7 @@
 public struct Word: Equatable, Hashable, Sendable {
+    public static let digits = 3
+    public static let zero = Word(0)
+
     public let rawValue: Int
 
     public init(_ rawValue: Int) {
@@ -17,5 +20,19 @@ public struct Word: Equatable, Hashable, Sendable {
 
     public var signedValue: Int {
         rawValue <= LMCConstants.signedWordRange.upperBound ? rawValue : rawValue - LMCConstants.decimalBase
+    }
+
+    public var zeroPaddedString: String {
+        let description = String(rawValue)
+        guard description.count < Self.digits else { return description }
+        return String(repeating: "0", count: Self.digits - description.count) + description
+    }
+
+    public func highOrderDigit() -> Int {
+        rawValue / 100
+    }
+
+    public func lowOrderValue() -> Int {
+        rawValue % 100
     }
 }

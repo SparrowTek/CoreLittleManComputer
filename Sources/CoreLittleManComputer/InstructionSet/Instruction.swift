@@ -8,8 +8,23 @@ public struct Instruction: Equatable, Sendable {
     public let opcode: Opcode
     public let operand: Operand
 
-    public init(opcode: Opcode, operand: Operand = .none) {
+    public init(opcode: Opcode, operand: Operand = .none) throws {
+        try Instruction.validate(opcode: opcode, operand: operand)
         self.opcode = opcode
         self.operand = operand
+    }
+
+    private static func validate(opcode: Opcode, operand: Operand) throws {
+        switch opcode.metadata.operand {
+        case .none:
+            guard operand == .none else { throw InstructionError.unexpectedOperand(opcode) }
+        case .address:
+            guard case .address = operand else { throw InstructionError.operandRequired(opcode) }
+        case .literal:
+            guard case let .literal(value) = operand else { throw InstructionError.operandRequired(opcode) }
+            guard LMCConstants.signedWordRange.contains(value) else {
+                throw InstructionError.literalOutOfRange(value)
+            }
+        }
     }
 }
