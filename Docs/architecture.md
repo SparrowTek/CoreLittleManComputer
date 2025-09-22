@@ -12,16 +12,6 @@ The package models the Little Man Computer specification as a layered architectu
 7. **Diagnostics** – event stream for tooling and UI layers.
 8. **Persistence** – serialisation helpers for saving/restoring programs and state.
 
-## Status
-- Core types, instruction metadata, execution, assembler, diagnostics, persistence, and front-end adapters are implemented.
-- Remaining work focuses on higher-level documentation, extended examples, and polish.
-
-## Next Steps
-- Stage 10: document sample workflows and expand example catalogue.
-- Stage 11: hardening (thread-safety audit, localisation, static analysis).
-
-Refer to `plan.md` at the repository root for the full roadmap.
-
 ### Diagnostics Notes
 - `ExecutionEngine` emits `ExecutionEvent` entries via both an injected observer and an `AsyncStream` for async consumers.
 - `ProgramState` keeps a bounded trace buffer; `TraceFormatter` and `StateSnapshotFormatter` provide CLI-friendly renderings.
