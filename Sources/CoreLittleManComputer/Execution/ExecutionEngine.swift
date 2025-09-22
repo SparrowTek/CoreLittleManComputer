@@ -29,6 +29,10 @@ public enum ExecutionSchedule: Sendable {
     }
 }
 
+/// Virtual machine runtime for executing Little Man Computer programs.
+///
+/// - Note: `ExecutionEngine` is not internally synchronised. Mutate and call
+///   methods from a single task/queue unless you provide external coordination.
 public final class ExecutionEngine: @unchecked Sendable {
     public let program: Program
     public let numericPolicy: NumericPolicy
