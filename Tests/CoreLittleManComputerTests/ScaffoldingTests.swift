@@ -406,6 +406,37 @@ func executionEngineRunsBranchLoop() throws {
     #expect(engine.state.outbox == [2, 1, 0])
     #expect(engine.state.halted)
 }
+
+@Test
+func stateStreamEmitsStates() async throws {
+    let source = """
+    LDA VALUE
+    OUT
+    HLT
+    VALUE DAT 4
+    """
+
+    let assembler = Assembler()
+    let program = try assembler.assemble(source)
+    let engine = ExecutionEngine(program: program)
+
+    let stream = engine.stateStream()
+    var iterator = stream.makeAsyncIterator()
+
+    let runTask = Task {
+        try engine.runUntilHalt()
+    }
+
+    var observedOutboxes: [[Int]] = []
+    while let state = await iterator.next() {
+        observedOutboxes.append(state.outbox)
+    }
+
+    _ = try await runTask.value
+
+    #expect(observedOutboxes.contains { $0 == [4] })
+    #expect(engine.state.halted)
+}
 #else
 #warning("Swift Testing is unavailable; CoreLittleManComputer tests are stubs until the toolchain provides the Testing module.")
 #endif

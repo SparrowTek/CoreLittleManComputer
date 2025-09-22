@@ -17,8 +17,8 @@ The package models the Little Man Computer specification as a layered architectu
 - Persistence utilities remain pending along with higher-level adapters.
 
 ## Next Steps
-- Implement Stage 2 tasks (complete `Word` utilities, numeric policies, encode/decode helpers).
-- Flesh out Stage 3 program representations and state management.
+- Stage 8: add persistence helpers (Codable snapshots, import/export utilities).
+- Stage 9: broaden regression and performance testing.
 
 Refer to `plan.md` at the repository root for the full roadmap.
 
