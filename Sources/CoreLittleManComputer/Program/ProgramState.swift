@@ -51,7 +51,9 @@ public struct ProgramState: Sendable {
     }
 
     public mutating func incrementCounter() {
-        counter = counter.advanced(by: 1)
+        let next = counter.rawValue + 1
+        precondition(MailboxAddress.validRange.contains(next), "Program counter advanced out of bounds")
+        counter = MailboxAddress(next)
     }
 
     public mutating func updateAccumulator(_ newValue: Accumulator) {

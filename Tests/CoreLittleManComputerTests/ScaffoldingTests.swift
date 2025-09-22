@@ -230,6 +230,116 @@ func executionEngineStoresAccumulatorIntoMemory() throws {
     try engine.step() // HLT
     #expect(engine.state.halted)
 }
+
+@Test
+func executionEngineRunUntilHaltCompletes() throws {
+    let source = """
+    LDA VALUE
+    OUT
+    HLT
+    VALUE DAT 7
+    """
+
+    let assembler = Assembler()
+    let program = try assembler.assemble(source)
+    let engine = ExecutionEngine(program: program)
+
+    try engine.runUntilHalt()
+    #expect(engine.state.halted)
+    #expect(engine.state.outbox == [7])
+}
+
+@Test
+func executionEngineBreakpointStopsStep() throws {
+    let source = """
+    LDA ONE
+    ADD ONE
+    HLT
+    ONE DAT 1
+    """
+
+    let assembler = Assembler()
+    let program = try assembler.assemble(source)
+    let engine = ExecutionEngine(program: program)
+    engine.addBreakpoint(MailboxAddress(1))
+
+    do {
+        try engine.step()
+        Issue.record("Expected breakpoint hit")
+    } catch ExecutionError.breakpointHit(let address) {
+        #expect(address == MailboxAddress(1))
+    }
+}
+
+@Test
+func executionEngineAsyncRunStopsOnBreakpoint() async throws {
+    let source = """
+    LDA ONE
+    ADD ONE
+    OUT
+    BRA END
+    ONE DAT 1
+    END HLT
+    """
+
+    let assembler = Assembler()
+    let program = try assembler.assemble(source)
+    let engine = ExecutionEngine(program: program)
+    engine.addBreakpoint(MailboxAddress(3))
+
+    do {
+        try await engine.run(schedule: .unlimited)
+        Issue.record("Expected breakpoint during async run")
+    } catch ExecutionError.breakpointHit(let address) {
+        #expect(address == MailboxAddress(3))
+    }
+}
+
+@Test
+func executionEngineEventStreamPublishesEvents() async throws {
+    let source = """
+    INP
+    OUT
+    HLT
+    """
+
+    let assembler = Assembler()
+    let program = try assembler.assemble(source)
+    let engine = ExecutionEngine(program: program, initialState: ProgramState(inbox: [9]))
+
+    let eventTask = Task {
+        try engine.step()
+        try engine.step()
+    }
+
+    var iterator = engine.events.makeAsyncIterator()
+    var seenInstructionDecoded = false
+    var seenOutput = false
+
+    while let event = await iterator.next() {
+        switch event {
+        case .instructionDecoded(let instruction):
+            if instruction.opcode == .output {
+                seenInstructionDecoded = true
+            }
+        case .outputProduced(let value):
+            seenOutput = value == 9
+        case .cycleCompleted:
+            if seenInstructionDecoded && seenOutput {
+                break
+            }
+        default:
+            break
+        }
+        if seenInstructionDecoded && seenOutput {
+            break
+        }
+    }
+
+    #expect(seenInstructionDecoded)
+    #expect(seenOutput)
+    try await eventTask.value
+}
 #else
 #warning("Swift Testing is unavailable; CoreLittleManComputer tests are stubs until the toolchain provides the Testing module.")
 #endif

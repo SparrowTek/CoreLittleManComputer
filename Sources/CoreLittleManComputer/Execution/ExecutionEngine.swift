@@ -4,6 +4,29 @@ public enum ExecutionError: Error, Sendable, Equatable {
     case mailboxOutOfBounds(MailboxAddress)
     case invalidInstruction(Word)
     case numericError(NumericError)
+    case breakpointHit(MailboxAddress)
+}
+
+public enum ExecutionSchedule: Sendable {
+    case unlimited
+    case hertz(Double)
+    case interval(TimeInterval)
+    case nanoseconds(UInt64)
+
+    fileprivate func delayNanoseconds() -> UInt64? {
+        switch self {
+        case .unlimited:
+            return nil
+        case .hertz(let hz) where hz > 0:
+            return UInt64(Double(NSEC_PER_SEC) / hz)
+        case .interval(let seconds) where seconds > 0:
+            return UInt64(seconds * Double(NSEC_PER_SEC))
+        case .nanoseconds(let ns):
+            return ns
+        default:
+            return nil
+        }
+    }
 }
 
 public final class ExecutionEngine: @unchecked Sendable {
@@ -11,17 +34,109 @@ public final class ExecutionEngine: @unchecked Sendable {
     public let numericPolicy: NumericPolicy
     private(set) public var state: ProgramState
     private let observer: ExecutionObserver
+    private var inboxBox: InboxBox?
+    private var outboxBox: OutboxBox?
+    private var breakpoints: Set<MailboxAddress>
+    private let eventStream: AsyncStream<ExecutionEvent>
+    private let eventContinuation: AsyncStream<ExecutionEvent>.Continuation
+
+    public var events: AsyncStream<ExecutionEvent> { eventStream }
 
     public init(program: Program,
                 initialState: ProgramState = ProgramState(),
                 numericPolicy: NumericPolicy = .trapOnOverflow,
-                observer: ExecutionObserver = NoOpObserver()) {
+                observer: ExecutionObserver = NoOpObserver(),
+                inboxProvider: (any InboxProviding)? = nil,
+                outboxConsumer: (any OutboxConsuming)? = nil,
+                breakpoints: Set<MailboxAddress> = []) {
         self.program = program
+        let pair = AsyncStream<ExecutionEvent>.makeStream()
+        self.eventStream = pair.stream
+        self.eventContinuation = pair.continuation
         var workingState = initialState
         workingState.ensureMemoryInitialized(with: program.memoryImage)
         self.state = workingState
         self.numericPolicy = numericPolicy
         self.observer = observer
+        if let inboxProvider {
+            self.inboxBox = InboxBox(provider: inboxProvider)
+        } else {
+            self.inboxBox = nil
+        }
+        if let outboxConsumer {
+            self.outboxBox = OutboxBox(consumer: outboxConsumer)
+        } else {
+            self.outboxBox = nil
+        }
+        self.breakpoints = breakpoints
+    }
+
+    deinit {
+        eventContinuation.finish()
+    }
+
+    public func setInboxProvider(_ provider: some InboxProviding) {
+        inboxBox = InboxBox(provider: provider)
+    }
+
+    public func clearInboxProvider() {
+        inboxBox = nil
+    }
+
+    public func setOutboxConsumer(_ consumer: some OutboxConsuming) {
+        outboxBox = OutboxBox(consumer: consumer)
+    }
+
+    public func clearOutboxConsumer() {
+        outboxBox = nil
+    }
+
+    public func addBreakpoint(_ address: MailboxAddress) {
+        breakpoints.insert(address)
+    }
+
+    public func removeBreakpoint(_ address: MailboxAddress) {
+        breakpoints.remove(address)
+    }
+
+    public func removeAllBreakpoints() {
+        breakpoints.removeAll()
+    }
+
+    @discardableResult
+    public func runUntilHalt(maxCycles: Int? = nil) throws -> ProgramState {
+        var executed = 0
+        while !state.halted {
+            if let maxCycles, executed >= maxCycles { break }
+            try step()
+            executed += 1
+        }
+        return state
+    }
+
+    public func runNext(_ cycles: Int) throws {
+        guard cycles >= 0 else { return }
+        for _ in 0..<cycles {
+            guard !state.halted else { break }
+            try step()
+        }
+    }
+
+    public func run(schedule: ExecutionSchedule = .unlimited,
+                    maxCycles: Int? = nil,
+                    shouldStop: @Sendable (ProgramState) -> Bool = { _ in false }) async throws {
+        var executed = 0
+        let delay = schedule.delayNanoseconds()
+        while !state.halted {
+            if let maxCycles, executed >= maxCycles { break }
+            if shouldStop(state) { break }
+            try Task.checkCancellation()
+            try step()
+            executed += 1
+            if let delay {
+                try await Task.sleep(nanoseconds: delay)
+            }
+        }
     }
 
     public func step() throws {
@@ -34,7 +149,7 @@ public final class ExecutionEngine: @unchecked Sendable {
             throw ExecutionError.mailboxOutOfBounds(counter)
         }
 
-        observer.handle(.cycleStarted(cycle: state.cycles, counter: counter))
+        emit(.cycleStarted(cycle: state.cycles, counter: counter))
 
         let word = state.word(at: counter)
         let decoded: InstructionWord.Decoded
@@ -42,20 +157,26 @@ public final class ExecutionEngine: @unchecked Sendable {
             decoded = try InstructionWord(word).decode()
         } catch {
             state.setHalted()
-            observer.handle(.error("Invalid instruction word \(word.rawValue)"))
+            emit(.error("Invalid instruction word \(word.rawValue)"))
             throw ExecutionError.invalidInstruction(word)
         }
 
         switch decoded {
         case .data:
             state.setHalted()
-            observer.handle(.error("Encountered data at \(counter.rawValue)"))
+            emit(.error("Encountered data at \(counter.rawValue)"))
             throw ExecutionError.invalidInstruction(word)
         case .instruction(let instruction):
             state.record(instruction: instruction)
-            observer.handle(.instructionDecoded(instruction))
+            emit(.instructionDecoded(instruction))
             try execute(instruction)
+            emit(.instructionExecuted(instruction, state))
             state.incrementCycle()
+            emit(.cycleCompleted(cycle: state.cycles, state: state))
+            if breakpoints.contains(state.counter) {
+                emit(.breakpointHit(state.counter))
+                throw ExecutionError.breakpointHit(state.counter)
+            }
         }
     }
 
@@ -147,34 +268,42 @@ public final class ExecutionEngine: @unchecked Sendable {
     }
 
     private func input() throws {
-        guard let value = state.dequeueInbox() else {
+        if var box = inboxBox {
+            let value = box.dequeue()
+            inboxBox = box
+            if let value {
+                try receiveInput(value)
+                return
+            }
+        }
+        if let value = state.dequeueInbox() {
+            try receiveInput(value)
+        } else {
+            emit(.inputRequested)
             throw ExecutionError.awaitingInput
         }
-        do {
-            let accumulator = try numericPolicy.accumulator(from: value)
-            state.updateAccumulator(accumulator)
-        } catch let error as NumericError {
-            state.setHalted()
-            throw ExecutionError.numericError(error)
-        }
-        state.incrementCounter()
     }
 
     private func output() {
-        state.emitOutput(state.accumulator.value)
-        observer.handle(.outputProduced(state.accumulator.value))
+        let value = state.accumulator.value
+        state.emitOutput(value)
+        if var box = outboxBox {
+            box.enqueue(value)
+            outboxBox = box
+        }
+        emit(.outputProduced(value))
         state.incrementCounter()
     }
 
     private func halt() {
         state.setHalted()
-        observer.handle(.halted)
+        emit(.halted)
     }
 
     private func operandAddress(from instruction: Instruction) throws -> MailboxAddress {
         guard case let .address(address) = instruction.operand else {
             state.setHalted()
-            observer.handle(.error("Operand expected for instruction \(instruction.opcode)"))
+            emit(.error("Operand expected for instruction \(instruction.opcode)"))
             let encodedWord = (try? InstructionWord.encode(instruction)) ?? .zero
             throw ExecutionError.invalidInstruction(encodedWord)
         }
@@ -191,4 +320,37 @@ public final class ExecutionEngine: @unchecked Sendable {
             throw ExecutionError.numericError(error)
         }
     }
+
+    private func receiveInput(_ value: Int) throws {
+        do {
+            let accumulator = try numericPolicy.accumulator(from: value)
+            state.updateAccumulator(accumulator)
+        } catch let error as NumericError {
+            state.setHalted()
+            throw ExecutionError.numericError(error)
+        }
+        state.incrementCounter()
+    }
+
+    private func emit(_ event: ExecutionEvent) {
+        observer.handle(event)
+        eventContinuation.yield(event)
+    }
 }
+
+private struct InboxBox: Sendable {
+    var provider: any InboxProviding
+
+    mutating func dequeue() -> Int? {
+        provider.dequeue()
+    }
+}
+
+private struct OutboxBox: Sendable {
+    var consumer: any OutboxConsuming
+
+    mutating func enqueue(_ value: Int) {
+        consumer.enqueue(value)
+    }
+}
+import Foundation
