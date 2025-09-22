@@ -57,3 +57,10 @@ Each sample includes comments outlining expected inbox/outbox behaviour for regr
 - Use `ProgramTextCodec` to load `.lmc` files and `ProgramSerializer` to persist compiled snapshots.
 - `ExecutionEngine.stateStream()` provides an `AsyncStream<ProgramState>` for progress updates; pair it with `TraceFormatter`/`StateSnapshotFormatter` for human-readable logs.
 - `Scripts/run-ci.sh` offers a quick validation hook (`swift build && swift test`).
+
+## Troubleshooting
+- **Assembler errors**: `invalidOpcode` or `operandExpected` include the source line. Verify mnemonics are uppercase (`ADD`, `STA`) and labels resolve to defined mailboxes.
+- **Mailbox bounds**: `ExecutionError.mailboxOutOfBounds` means a branch/store referenced `0..<100`. Check your `DAT` values or label offsets.
+- **Awaiting input**: Stepping can throw `ExecutionError.awaitingInput` when `INP` executes without inbox data. Enqueue values via `ProgramState.enqueueInbox(_)` or supply an `InboxProviding` channel.
+- **Numeric overflow**: With `NumericPolicy.trapOnOverflow`, arithmetic outside `-500...499` throws `ExecutionError.numericError`. Switch to `.wrapModulo` for classroom wraparound behaviour.
+- **Performance**: Long-running programs should use the async `run(schedule:maxCycles:)` API to keep UIs responsive and avoid blocking the main thread.
