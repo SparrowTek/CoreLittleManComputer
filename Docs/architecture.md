@@ -13,11 +13,15 @@ The package models the Little Man Computer specification as a layered architectu
 8. **Persistence** – serialisation helpers for saving/restoring programs and state.
 
 ## Status
-- Core types, instruction metadata, and scaffolding for higher layers are in place.
-- Assembler, execution semantics, diagnostics emission, and persistence are pending implementation in upcoming stages.
+- Core types, instruction metadata, assembler, execution engine, and diagnostics stream are in place.
+- Persistence utilities remain pending along with higher-level adapters.
 
 ## Next Steps
 - Implement Stage 2 tasks (complete `Word` utilities, numeric policies, encode/decode helpers).
 - Flesh out Stage 3 program representations and state management.
 
 Refer to `plan.md` at the repository root for the full roadmap.
+
+### Diagnostics Notes
+- `ExecutionEngine` emits `ExecutionEvent` entries via both an injected observer and an `AsyncStream` for async consumers.
+- `ProgramState` keeps a bounded trace buffer; `TraceFormatter` and `StateSnapshotFormatter` provide CLI-friendly renderings.

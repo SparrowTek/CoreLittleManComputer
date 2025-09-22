@@ -340,6 +340,72 @@ func executionEngineEventStreamPublishesEvents() async throws {
     #expect(seenOutput)
     try await eventTask.value
 }
+
+@Test
+func traceFormatterProducesReadableOutput() throws {
+    let instruction = try Instruction(opcode: .add, operand: .address(MailboxAddress(5)))
+    let entry = ProgramState.TraceEntry(cycle: 1,
+                                        counter: MailboxAddress(2),
+                                        instruction: instruction,
+                                        accumulator: Accumulator(7))
+    let formatter = TraceFormatter()
+    let output = formatter.render([entry])
+    #expect(output.contains("cycle\tcounter\topcode\taccumulator"))
+    #expect(output.contains("1\t2\tADD\t7"))
+
+    let multi = TraceFormatter(style: .multiLine, includeHeader: false).render([entry])
+    #expect(multi.contains("Cycle: 1"))
+    #expect(multi.contains("Instruction: ADD"))
+}
+
+@Test
+func stateSnapshotFormatterSummarisesState() {
+    var state = ProgramState()
+    state.emitOutput(3)
+    let formatter = StateSnapshotFormatter()
+    let summary = formatter.render(state)
+    #expect(summary.contains("Outbox: [3]"))
+}
+
+@Test
+func executionEngineWrapPolicyHandlesOverflow() throws {
+    let source = """
+    LDA VALUE
+    ADD VALUE
+    OUT
+    HLT
+    VALUE DAT 600
+    """
+
+    let assembler = Assembler()
+    let program = try assembler.assemble(source)
+    let engine = ExecutionEngine(program: program, numericPolicy: .wrapModulo)
+
+    try engine.runUntilHalt()
+    #expect(engine.state.outbox.first == 200)
+}
+
+@Test
+func executionEngineRunsBranchLoop() throws {
+    let source = """
+    LOOP LDA COUNT
+    OUT
+    SUB ONE
+    STA COUNT
+    BRP LOOP
+    HLT
+    COUNT DAT 2
+    ONE DAT 1
+    """
+
+    let assembler = Assembler()
+    let program = try assembler.assemble(source)
+    let engine = ExecutionEngine(program: program)
+
+    try engine.runUntilHalt(maxCycles: 100)
+    #expect(engine.state.outbox == [2, 1, 0])
+    #expect(engine.state.halted)
+}
 #else
 #warning("Swift Testing is unavailable; CoreLittleManComputer tests are stubs until the toolchain provides the Testing module.")
 #endif
