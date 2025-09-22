@@ -40,7 +40,11 @@ public struct Program: Sendable {
     }
 
     public func label(named name: String) -> MailboxAddress? {
-        labels[name]
+        if let exact = labels[name] {
+            return exact
+        }
+        let uppercased = name.uppercased()
+        return labels[uppercased]
     }
 
     public func sourceLocation(for address: MailboxAddress) -> SourceLocation? {

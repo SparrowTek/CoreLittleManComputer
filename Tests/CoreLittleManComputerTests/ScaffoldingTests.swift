@@ -95,6 +95,80 @@ func programStateTraceRecordsEntries() throws {
     state.clearOutputs()
     #expect(state.outbox.isEmpty)
 }
+
+@Test
+func assemblerCompilesSampleProgram() throws {
+    let source = """
+    LDA ONE
+    ADD TEN
+    OUT
+    ADD THREE
+    OUT
+    HLT
+    ONE DAT 1
+    TEN DAT 10
+    THREE DAT 3
+    """
+
+    let assembler = Assembler()
+    let program = try assembler.assemble(source)
+
+    let expected = [506, 107, 902, 108, 902, 0, 1, 10, 3]
+    for (index, value) in expected.enumerated() {
+        let address = MailboxAddress(index)
+        #expect(program.word(at: address).rawValue == value)
+    }
+
+    #expect(program.label(named: "ONE") == MailboxAddress(6))
+    if let location = program.sourceLocation(for: MailboxAddress(0)) {
+        #expect(location.line == 1)
+    }
+}
+
+@Test
+func assemblerReportsUnresolvedLabels() {
+    let source = "LDA MISSING"
+    let assembler = Assembler()
+    do {
+        _ = try assembler.assemble(source)
+        Issue.record("Expected unresolved symbol error")
+    } catch let error as AssemblerError {
+        switch error {
+        case .unresolvedSymbol(let line, let symbol):
+            #expect(line == 1)
+            #expect(symbol == "MISSING")
+        default:
+            Issue.record("Unexpected error: \(error)")
+        }
+    } catch {
+        Issue.record("Unexpected error: \(error)")
+    }
+}
+
+@Test
+func assemblerRejectsDuplicateLabels() {
+    let source = """
+    LOOP LDA ONE
+    LOOP ADD ONE
+    ONE DAT 1
+    """
+
+    let assembler = Assembler()
+    do {
+        _ = try assembler.assemble(source)
+        Issue.record("Expected duplicate label error")
+    } catch let error as AssemblerError {
+        switch error {
+        case .duplicateLabel(let line, let label):
+            #expect(line == 2)
+            #expect(label == "LOOP")
+        default:
+            Issue.record("Unexpected error: \(error)")
+        }
+    } catch {
+        Issue.record("Unexpected error: \(error)")
+    }
+}
 #else
 #warning("Swift Testing is unavailable; CoreLittleManComputer tests are stubs until the toolchain provides the Testing module.")
 #endif
