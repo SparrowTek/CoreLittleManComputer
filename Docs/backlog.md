@@ -1,7 +1,7 @@
 # CoreLittleManComputer Backlog
 
 ## Persistence
-- Add snapshot schema metadata (e.g. tool versions, creation timestamp) and migration helpers so future versions can upgrade older JSON payloads gracefully.
+- Add migration utilities to upgrade older snapshot versions (e.g. v0 -> v1) and surface schema metadata in CLI tooling.
 
 ## Execution
 - Investigate watchpoints and cycle-based breakpoints for richer debugging support.

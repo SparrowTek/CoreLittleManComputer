@@ -452,6 +452,8 @@ func programSerializationRoundTrip() throws {
     let program = try codec.assemble(source)
     let serializer = ProgramSerializer(prettyPrinted: true)
     let data = try serializer.exportJSON(program)
+    let snapshot = try JSONDecoder().decode(ProgramSnapshot.self, from: data)
+    #expect(snapshot.metadata.schemaVersion == ProgramSnapshot.currentVersion)
     let decoded = try serializer.importJSON(data)
 
     #expect(decoded.usedRange == program.usedRange)
@@ -472,6 +474,8 @@ func programStateSerializationRoundTrip() throws {
 
     let serializer = ProgramStateSerializer()
     let data = try serializer.exportJSON(engine.state)
+    let stateSnapshot = try JSONDecoder().decode(ProgramStateSnapshot.self, from: data)
+    #expect(stateSnapshot.metadata.schemaVersion == ProgramStateSnapshot.currentVersion)
     let restored = try serializer.importJSON(data)
 
     #expect(restored.outbox == [5])
