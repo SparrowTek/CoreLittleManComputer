@@ -25,3 +25,8 @@ Refer to `plan.md` at the repository root for the full roadmap.
 ### Diagnostics Notes
 - `ExecutionEngine` emits `ExecutionEvent` entries via both an injected observer and an `AsyncStream` for async consumers.
 - `ProgramState` keeps a bounded trace buffer; `TraceFormatter` and `StateSnapshotFormatter` provide CLI-friendly renderings.
+
+### Persistence Notes
+- `ProgramSnapshot`/`ProgramStateSnapshot` capture Codable representations validated against LMC bounds.
+- `ProgramSerializer` and `ProgramStateSerializer` emit/restore JSON suitable for CLI storage; add schema versioning before shipping.
+- `ProgramTextCodec` wraps assembling/disassembling for import/export workflows.

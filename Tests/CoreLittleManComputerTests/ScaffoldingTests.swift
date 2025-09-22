@@ -437,6 +437,86 @@ func stateStreamEmitsStates() async throws {
     #expect(observedOutboxes.contains { $0 == [4] })
     #expect(engine.state.halted)
 }
+
+@Test
+func programSerializationRoundTrip() throws {
+    let source = """
+    LDA ONE
+    OUT
+    HLT
+    ONE DAT 1
+    """
+
+    let codec = ProgramTextCodec()
+    let program = try codec.assemble(source)
+    let serializer = ProgramSerializer(prettyPrinted: true)
+    let data = try serializer.exportJSON(program)
+    let decoded = try serializer.importJSON(data)
+
+    #expect(decoded.usedRange == program.usedRange)
+    for index in 0..<decoded.usedRange.upperBound {
+        let address = MailboxAddress(index)
+        #expect(decoded.word(at: address) == program.word(at: address))
+    }
+}
+
+@Test
+func programStateSerializationRoundTrip() throws {
+    let program = Program(words: [Word(901), Word(902), Word.zero])
+    var state = ProgramState()
+    state.enqueueInbox(5)
+    let engine = ExecutionEngine(program: program, initialState: state)
+    try engine.step() // INP
+    try engine.step() // OUT
+
+    let serializer = ProgramStateSerializer()
+    let data = try serializer.exportJSON(engine.state)
+    let restored = try serializer.importJSON(data)
+
+    #expect(restored.outbox == [5])
+    #expect(restored.counter == MailboxAddress(2))
+}
+
+@Test
+func assemblerDisassemblerRoundTripMaintainsText() throws {
+    let source = """
+    LOOP LDA COUNT
+    OUT
+    SUB ONE
+    STA COUNT
+    BRP LOOP
+    HLT
+    COUNT DAT 2
+    ONE DAT 1
+    """
+
+    let codec = ProgramTextCodec()
+    let program = try codec.assemble(source)
+    let disassembly = codec.disassemble(program)
+    #expect(disassembly.contains("LOOP"))
+    let reassembled = try codec.assemble(disassembly)
+    #expect(reassembled.usedRange == program.usedRange)
+}
+
+@Test
+func executionEngineHandlesRandomAdds() throws {
+    for lhs in -3...3 {
+        for rhs in -3...3 {
+            let source = """
+            LDA A
+            ADD B
+            OUT
+            HLT
+            A DAT \(lhs)
+            B DAT \(rhs)
+            """
+            let program = try ProgramTextCodec().assemble(source)
+            let engine = ExecutionEngine(program: program)
+            try engine.runUntilHalt()
+            #expect(engine.state.outbox == [lhs + rhs])
+        }
+    }
+}
 #else
 #warning("Swift Testing is unavailable; CoreLittleManComputer tests are stubs until the toolchain provides the Testing module.")
 #endif

@@ -1,4 +1,4 @@
-public struct Word: Equatable, Hashable, Sendable {
+public struct Word: Equatable, Hashable, Sendable, Codable {
     public static let digits = 3
     public static let zero = Word(0)
 
@@ -34,5 +34,19 @@ public struct Word: Equatable, Hashable, Sendable {
 
     public func lowOrderValue() -> Int {
         rawValue % 100
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(Int.self)
+        guard LMCConstants.wordRange.contains(value) else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Word must be within 0...999")
+        }
+        self.rawValue = value
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
