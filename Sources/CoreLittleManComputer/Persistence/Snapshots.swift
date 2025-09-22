@@ -5,27 +5,39 @@ public enum SnapshotError: Error, Sendable {
     case invalidMailbox(Int)
     case invalidAccumulator(Int)
     case capacityExceeded(Int)
+    case versionMismatch(Int)
 }
 
 public struct ProgramSnapshot: Codable, Sendable {
+    public static let currentVersion = 1
+
+    public let version: Int
     public let words: [Int]
     public let usedCount: Int
     public let labels: [String: Int]
 
-    public init(program: Program) {
-        self.words = program.memoryImage.map { $0.rawValue }
-        self.usedCount = program.usedRange.upperBound
-        self.labels = program.labels.mapValues { $0.rawValue }
-    }
-
-    public init(words: [Int], usedCount: Int, labels: [String: Int]) {
+    public init(version: Int = ProgramSnapshot.currentVersion,
+                words: [Int],
+                usedCount: Int,
+                labels: [String: Int]) {
+        self.version = version
         self.words = words
         self.usedCount = usedCount
         self.labels = labels
     }
+
+    public init(program: Program) {
+        self.version = Self.currentVersion
+        self.words = program.memoryImage.map { $0.rawValue }
+        self.usedCount = program.usedRange.upperBound
+        self.labels = program.labels.mapValues { $0.rawValue }
+    }
 }
 
 public struct ProgramStateSnapshot: Codable, Sendable {
+    public static let currentVersion = 1
+
+    public let version: Int
     public let counter: Int
     public let accumulator: Int
     public let inbox: [Int]
@@ -34,23 +46,15 @@ public struct ProgramStateSnapshot: Codable, Sendable {
     public let cycles: Int
     public let memory: [Int]
 
-    public init(state: ProgramState) {
-        self.counter = state.counter.rawValue
-        self.accumulator = state.accumulator.value
-        self.inbox = state.inbox
-        self.outbox = state.outbox
-        self.halted = state.halted
-        self.cycles = state.cycles
-        self.memory = state.memorySnapshot.map { $0.rawValue }
-    }
-
-    public init(counter: Int,
+    public init(version: Int = ProgramStateSnapshot.currentVersion,
+                counter: Int,
                 accumulator: Int,
                 inbox: [Int],
                 outbox: [Int],
                 halted: Bool,
                 cycles: Int,
                 memory: [Int]) {
+        self.version = version
         self.counter = counter
         self.accumulator = accumulator
         self.inbox = inbox
@@ -58,6 +62,17 @@ public struct ProgramStateSnapshot: Codable, Sendable {
         self.halted = halted
         self.cycles = cycles
         self.memory = memory
+    }
+
+    public init(state: ProgramState) {
+        self.version = Self.currentVersion
+        self.counter = state.counter.rawValue
+        self.accumulator = state.accumulator.value
+        self.inbox = state.inbox
+        self.outbox = state.outbox
+        self.halted = state.halted
+        self.cycles = state.cycles
+        self.memory = state.memorySnapshot.map { $0.rawValue }
     }
 }
 

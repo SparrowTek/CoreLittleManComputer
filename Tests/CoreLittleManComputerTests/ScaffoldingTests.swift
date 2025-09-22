@@ -1,5 +1,6 @@
 #if canImport(Testing)
 import Testing
+import Foundation
 @testable import CoreLittleManComputer
 
 @Test
@@ -516,6 +517,30 @@ func executionEngineHandlesRandomAdds() throws {
             #expect(engine.state.outbox == [lhs + rhs])
         }
     }
+}
+
+@Test
+func executionEnginePerformanceSmoke() throws {
+    let source = """
+    LOOP LDA COUNT
+    SUB ONE
+    STA COUNT
+    BRP LOOP
+    HLT
+    COUNT DAT 200
+    ONE DAT 1
+    """
+
+    let program = try ProgramTextCodec().assemble(source)
+    let engine = ExecutionEngine(program: program)
+
+    let start = Date()
+    try engine.runUntilHalt(maxCycles: 10_000)
+    let elapsed = Date().timeIntervalSince(start)
+
+    #expect(engine.state.halted)
+    #expect(engine.state.cycles <= 10_000)
+    #expect(elapsed < 1.0)
 }
 #else
 #warning("Swift Testing is unavailable; CoreLittleManComputer tests are stubs until the toolchain provides the Testing module.")

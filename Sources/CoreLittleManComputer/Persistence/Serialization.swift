@@ -32,6 +32,9 @@ public struct ProgramSerializer: Sendable {
     public func importJSON(_ data: Data) throws -> Program {
         do {
             let snapshot = try decoder.decode(ProgramSnapshot.self, from: data)
+            guard snapshot.version <= ProgramSnapshot.currentVersion else {
+                throw ProgramSerializationError.snapshot(.versionMismatch(snapshot.version))
+            }
             return try Program(snapshot: snapshot)
         } catch let error as SnapshotError {
             throw ProgramSerializationError.snapshot(error)
@@ -63,6 +66,9 @@ public struct ProgramStateSerializer: Sendable {
     public func importJSON(_ data: Data) throws -> ProgramState {
         do {
             let snapshot = try decoder.decode(ProgramStateSnapshot.self, from: data)
+            guard snapshot.version <= ProgramStateSnapshot.currentVersion else {
+                throw ProgramSerializationError.snapshot(.versionMismatch(snapshot.version))
+            }
             return try ProgramState(snapshot: snapshot)
         } catch let error as SnapshotError {
             throw ProgramSerializationError.snapshot(error)
