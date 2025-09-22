@@ -123,6 +123,9 @@ func assemblerCompilesSampleProgram() throws {
     if let location = program.sourceLocation(for: MailboxAddress(0)) {
         #expect(location.line == 1)
     }
+
+    let disassembled = Assembler().disassemble(program)
+    #expect(disassembled.contains("LDA ONE"))
 }
 
 @Test
@@ -168,6 +171,64 @@ func assemblerRejectsDuplicateLabels() {
     } catch {
         Issue.record("Unexpected error: \(error)")
     }
+}
+
+@Test
+func executionEngineHandlesInputOutput() throws {
+    let source = """
+    INP
+    OUT
+    HLT
+    """
+
+    let assembler = Assembler()
+    let program = try assembler.assemble(source)
+
+    let initialState = ProgramState(inbox: [42])
+    let engine = ExecutionEngine(program: program, initialState: initialState)
+
+    try engine.step() // INP
+    #expect(engine.state.accumulator.value == 42)
+    #expect(engine.state.counter == MailboxAddress(1))
+
+    try engine.step() // OUT
+    #expect(engine.state.outbox == [42])
+    #expect(engine.state.counter == MailboxAddress(2))
+
+    try engine.step() // HLT
+    #expect(engine.state.halted)
+
+    do {
+        try engine.step()
+        Issue.record("Expected halted error")
+    } catch let error as ExecutionError {
+        #expect(error == .halted)
+    }
+}
+
+@Test
+func executionEngineStoresAccumulatorIntoMemory() throws {
+    let source = """
+    LDA TEN
+    STA RESULT
+    HLT
+    TEN DAT 5
+    RESULT DAT 0
+    """
+
+    let assembler = Assembler()
+    let program = try assembler.assemble(source)
+
+    let engine = ExecutionEngine(program: program)
+    try engine.step() // LDA TEN
+    #expect(engine.state.accumulator.value == 5)
+
+    try engine.step() // STA RESULT
+    let resultAddress = MailboxAddress(4)
+    #expect(engine.state.word(at: resultAddress).rawValue == 5)
+
+    try engine.step() // HLT
+    #expect(engine.state.halted)
 }
 #else
 #warning("Swift Testing is unavailable; CoreLittleManComputer tests are stubs until the toolchain provides the Testing module.")

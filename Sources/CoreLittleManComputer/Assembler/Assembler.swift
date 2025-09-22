@@ -91,6 +91,38 @@ public struct Assembler: Sendable {
         return Program(words: words, labels: resolvedLabels, sourceMap: sourceMap)
     }
 
+    public func disassemble(_ program: Program) -> String {
+        var components: [String] = []
+        var reverseLabels: [Int: [String]] = [:]
+
+        for (label, address) in program.labels {
+            reverseLabels[address.rawValue, default: []].append(label)
+        }
+
+        let usedRange = program.usedRange
+        for index in usedRange.lowerBound..<usedRange.upperBound {
+            let address = MailboxAddress(index)
+            let word = program.word(at: address)
+            let decoded = try? InstructionWord(word).decode()
+            let prefixLabels = reverseLabels[index]?.sorted().joined(separator: " ")
+
+            switch decoded {
+            case .instruction(let instruction):
+                components.append(renderInstruction(instruction,
+                                                    labels: prefixLabels,
+                                                    symbolForAddress: { address in
+                    reverseLabels[address.rawValue]?.sorted().first
+                }))
+            case .data(let data):
+                components.append(renderData(data, labels: prefixLabels))
+            case .none:
+                components.append(renderData(word, labels: prefixLabels))
+            }
+        }
+
+        return components.joined(separator: "\n")
+    }
+
     private func encode(_ instruction: ParsedInstruction, labels: [String: MailboxAddress]) throws -> Word {
         switch instruction.opcode {
         case .data:
@@ -254,4 +286,42 @@ private enum OperandDescriptor: Sendable {
     case mailboxSymbol(String)
     case literalValue(Int)
     case literalSymbol(String)
+}
+
+private func renderInstruction(
+    _ instruction: Instruction,
+    labels: String?,
+    symbolForAddress: (MailboxAddress) -> String?
+) -> String {
+    let mnemonic = instruction.opcode.metadata.mnemonic
+    var parts: [String] = []
+    if let labels, !labels.isEmpty {
+        parts.append(labels)
+    }
+    parts.append(mnemonic)
+
+    switch instruction.operand {
+    case .none:
+        break
+    case .address(let address):
+        if let symbol = symbolForAddress(address) {
+            parts.append(symbol)
+        } else {
+            parts.append(String(address.rawValue))
+        }
+    case .literal(let value):
+        parts.append(String(value))
+    }
+
+    return parts.joined(separator: " ")
+}
+
+private func renderData(_ word: Word, labels: String?) -> String {
+    var parts: [String] = []
+    if let labels, !labels.isEmpty {
+        parts.append(labels)
+    }
+    parts.append("DAT")
+    parts.append(String(word.signedValue))
+    return parts.joined(separator: " ")
 }

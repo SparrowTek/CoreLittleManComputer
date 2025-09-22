@@ -14,8 +14,10 @@ public struct ProgramState: Sendable {
     public private(set) var cycles: Int
     public private(set) var lastInstruction: Instruction?
     public private(set) var trace: [TraceEntry]
+    public private(set) var memory: [Word]
 
     private let traceLimit: Int
+    private var memoryInitialized: Bool
 
     public init(counter: MailboxAddress = .zero,
                 accumulator: Accumulator = .zero,
@@ -23,6 +25,7 @@ public struct ProgramState: Sendable {
                 outbox: [Int] = [],
                 halted: Bool = false,
                 cycles: Int = 0,
+                memory: [Word]? = nil,
                 traceLimit: Int = 128) {
         self.counter = counter
         self.accumulator = accumulator
@@ -33,6 +36,14 @@ public struct ProgramState: Sendable {
         self.lastInstruction = nil
         self.trace = []
         self.traceLimit = max(0, traceLimit)
+        if let memory {
+            precondition(memory.count == Program.capacity, "Program state memory must match capacity")
+            self.memory = memory
+            self.memoryInitialized = true
+        } else {
+            self.memory = Array(repeating: .zero, count: Program.capacity)
+            self.memoryInitialized = false
+        }
     }
 
     public mutating func advanceCounter(to address: MailboxAddress) {
@@ -84,6 +95,26 @@ public struct ProgramState: Sendable {
 
     public func matchesOutputs(of other: ProgramState) -> Bool {
         outbox == other.outbox
+    }
+
+    public func word(at address: MailboxAddress) -> Word {
+        memory[address.rawValue]
+    }
+
+    public mutating func store(word: Word, at address: MailboxAddress) {
+        memory[address.rawValue] = word
+        memoryInitialized = true
+    }
+
+    public mutating func ensureMemoryInitialized(with memory: [Word]) {
+        guard !memoryInitialized else { return }
+        precondition(memory.count == Program.capacity, "Program state memory must match capacity")
+        self.memory = memory
+        memoryInitialized = true
+    }
+
+    public var memorySnapshot: [Word] {
+        memory
     }
 
     private mutating func trimTraceBufferIfNeeded() {

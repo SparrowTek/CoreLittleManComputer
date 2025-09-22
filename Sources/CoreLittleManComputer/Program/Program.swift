@@ -50,4 +50,8 @@ public struct Program: Sendable {
     public func sourceLocation(for address: MailboxAddress) -> SourceLocation? {
         sourceMap[address]
     }
+
+    public var memoryImage: [Word] {
+        memory
+    }
 }
