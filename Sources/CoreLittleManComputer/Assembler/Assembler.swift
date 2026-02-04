@@ -1,4 +1,4 @@
-public enum AssemblerError: Error, Sendable, Equatable {
+public enum AssemblerError: Error, Sendable, Equatable, CustomStringConvertible {
     case invalidOpcode(line: Int, mnemonic: String)
     case operandExpected(line: Int, opcode: Opcode)
     case operandUnexpected(line: Int, opcode: Opcode)
@@ -8,6 +8,29 @@ public enum AssemblerError: Error, Sendable, Equatable {
     case unresolvedSymbol(line: Int, symbol: String)
     case trailingTokens(line: Int)
     case programTooLarge(line: Int)
+
+    public var description: String {
+        switch self {
+        case .invalidOpcode(let line, let mnemonic):
+            return "Line \(line): unknown opcode '\(mnemonic)'"
+        case .operandExpected(let line, let opcode):
+            return "Line \(line): \(opcode.metadata.mnemonic) requires an operand"
+        case .operandUnexpected(let line, let opcode):
+            return "Line \(line): \(opcode.metadata.mnemonic) does not take an operand"
+        case .addressOutOfRange(let line, let value):
+            return "Line \(line): address \(value) is out of range (0-99)"
+        case .literalOutOfRange(let line, let value):
+            return "Line \(line): literal \(value) is out of range"
+        case .duplicateLabel(let line, let label):
+            return "Line \(line): duplicate label '\(label)'"
+        case .unresolvedSymbol(let line, let symbol):
+            return "Line \(line): unresolved symbol '\(symbol)'"
+        case .trailingTokens(let line):
+            return "Line \(line): unexpected tokens after instruction"
+        case .programTooLarge(let line):
+            return "Line \(line): program exceeds 100 mailboxes"
+        }
+    }
 }
 
 public struct Assembler: Sendable {
@@ -226,9 +249,12 @@ public struct Assembler: Sendable {
         }
     }
 
+    private static let mnemonicTable: [String: Opcode] = Dictionary(
+        uniqueKeysWithValues: Opcode.allCases.map { ($0.metadata.mnemonic, $0) }
+    )
+
     private func opcode(from token: Substring) -> Opcode? {
-        let uppercased = token.uppercased()
-        return Opcode.allCases.first { $0.metadata.mnemonic == uppercased }
+        Self.mnemonicTable[token.uppercased()]
     }
 
     private func tokenize(_ line: String) -> [Substring] {

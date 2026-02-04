@@ -1,11 +1,26 @@
 import Foundation
 
-public enum SnapshotError: Error, Sendable {
+public enum SnapshotError: Error, Sendable, Equatable, CustomStringConvertible {
     case invalidWord(Int)
     case invalidMailbox(Int)
     case invalidAccumulator(Int)
     case capacityExceeded(Int)
     case versionMismatch(Int)
+
+    public var description: String {
+        switch self {
+        case .invalidWord(let value):
+            return "Invalid word value: \(value) (must be 0-999)"
+        case .invalidMailbox(let value):
+            return "Invalid mailbox address: \(value) (must be 0-99)"
+        case .invalidAccumulator(let value):
+            return "Invalid accumulator value: \(value) (must be -500 to 499)"
+        case .capacityExceeded(let count):
+            return "Capacity exceeded: \(count) exceeds maximum of 100"
+        case .versionMismatch(let version):
+            return "Unsupported snapshot version: \(version)"
+        }
+    }
 }
 
 public struct SnapshotMetadata: Codable, Sendable {

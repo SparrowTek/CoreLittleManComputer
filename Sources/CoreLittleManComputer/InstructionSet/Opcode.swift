@@ -31,30 +31,21 @@ public enum Opcode: CaseIterable, Sendable {
     case halt
     case data
 
+    private static let table: [Opcode: OpcodeMetadata] = [
+        .add: OpcodeMetadata(mnemonic: "ADD", description: "Add mailbox value to accumulator", operand: .address, baseWord: 100),
+        .subtract: OpcodeMetadata(mnemonic: "SUB", description: "Subtract mailbox value from accumulator", operand: .address, baseWord: 200),
+        .store: OpcodeMetadata(mnemonic: "STA", description: "Store accumulator into mailbox", operand: .address, baseWord: 300),
+        .load: OpcodeMetadata(mnemonic: "LDA", description: "Load mailbox into accumulator", operand: .address, baseWord: 500),
+        .branch: OpcodeMetadata(mnemonic: "BRA", description: "Branch to mailbox", operand: .address, baseWord: 600),
+        .branchIfZero: OpcodeMetadata(mnemonic: "BRZ", description: "Branch if accumulator is zero", operand: .address, baseWord: 700),
+        .branchIfPositive: OpcodeMetadata(mnemonic: "BRP", description: "Branch if accumulator is positive", operand: .address, baseWord: 800),
+        .input: OpcodeMetadata(mnemonic: "INP", description: "Read value into accumulator", operand: .none, baseWord: 901),
+        .output: OpcodeMetadata(mnemonic: "OUT", description: "Write accumulator to output", operand: .none, baseWord: 902),
+        .halt: OpcodeMetadata(mnemonic: "HLT", description: "Halt the program", operand: .none, baseWord: 0),
+        .data: OpcodeMetadata(mnemonic: "DAT", description: "Reserve memory or define data", operand: .literal, baseWord: 0),
+    ]
+
     public var metadata: OpcodeMetadata {
-        switch self {
-        case .add:
-            return OpcodeMetadata(mnemonic: "ADD", description: "Add mailbox value to accumulator", operand: .address, baseWord: 100)
-        case .subtract:
-            return OpcodeMetadata(mnemonic: "SUB", description: "Subtract mailbox value from accumulator", operand: .address, baseWord: 200)
-        case .store:
-            return OpcodeMetadata(mnemonic: "STA", description: "Store accumulator into mailbox", operand: .address, baseWord: 300)
-        case .load:
-            return OpcodeMetadata(mnemonic: "LDA", description: "Load mailbox into accumulator", operand: .address, baseWord: 500)
-        case .branch:
-            return OpcodeMetadata(mnemonic: "BRA", description: "Branch to mailbox", operand: .address, baseWord: 600)
-        case .branchIfZero:
-            return OpcodeMetadata(mnemonic: "BRZ", description: "Branch if accumulator is zero", operand: .address, baseWord: 700)
-        case .branchIfPositive:
-            return OpcodeMetadata(mnemonic: "BRP", description: "Branch if accumulator is positive", operand: .address, baseWord: 800)
-        case .input:
-            return OpcodeMetadata(mnemonic: "INP", description: "Read value into accumulator", operand: .none, baseWord: 901)
-        case .output:
-            return OpcodeMetadata(mnemonic: "OUT", description: "Write accumulator to output", operand: .none, baseWord: 902)
-        case .halt:
-            return OpcodeMetadata(mnemonic: "HLT", description: "Halt the program", operand: .none, baseWord: 0)
-        case .data:
-            return OpcodeMetadata(mnemonic: "DAT", description: "Reserve memory or define data", operand: .literal, baseWord: 0)
-        }
+        Self.table[self]!
     }
 }

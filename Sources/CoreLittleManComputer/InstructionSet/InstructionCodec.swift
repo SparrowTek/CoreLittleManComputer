@@ -1,12 +1,3 @@
-public enum InstructionDecodingError: Error, Sendable, Equatable {
-    case invalidOpcode(Word)
-}
-
-public enum InstructionEncodingError: Error, Sendable, Equatable {
-    case addressRequired(Opcode)
-    case literalRequired(Opcode)
-}
-
 public struct InstructionWord: Equatable, Sendable {
     public enum Decoded: Equatable, Sendable {
         case instruction(Instruction)
@@ -25,16 +16,16 @@ public struct InstructionWord: Equatable, Sendable {
 
     public func decode() throws -> Decoded {
         let value = word.rawValue
-        let hundreds = word.highOrderDigit()
+        let hundreds = word.highDigit
 
         switch hundreds {
-        case 1: return .instruction(try makeInstruction(.add, operandValue: word.lowOrderValue()))
-        case 2: return .instruction(try makeInstruction(.subtract, operandValue: word.lowOrderValue()))
-        case 3: return .instruction(try makeInstruction(.store, operandValue: word.lowOrderValue()))
-        case 5: return .instruction(try makeInstruction(.load, operandValue: word.lowOrderValue()))
-        case 6: return .instruction(try makeInstruction(.branch, operandValue: word.lowOrderValue()))
-        case 7: return .instruction(try makeInstruction(.branchIfZero, operandValue: word.lowOrderValue()))
-        case 8: return .instruction(try makeInstruction(.branchIfPositive, operandValue: word.lowOrderValue()))
+        case 1: return .instruction(try makeInstruction(.add, operandValue: word.lowValue))
+        case 2: return .instruction(try makeInstruction(.subtract, operandValue: word.lowValue))
+        case 3: return .instruction(try makeInstruction(.store, operandValue: word.lowValue))
+        case 5: return .instruction(try makeInstruction(.load, operandValue: word.lowValue))
+        case 6: return .instruction(try makeInstruction(.branch, operandValue: word.lowValue))
+        case 7: return .instruction(try makeInstruction(.branchIfZero, operandValue: word.lowValue))
+        case 8: return .instruction(try makeInstruction(.branchIfPositive, operandValue: word.lowValue))
         case 9:
             switch value {
             case 901:
@@ -59,7 +50,7 @@ public struct InstructionWord: Equatable, Sendable {
         switch instruction.opcode {
         case .add, .subtract, .store, .load, .branch, .branchIfZero, .branchIfPositive:
             guard case let .address(address) = instruction.operand else {
-                throw InstructionEncodingError.addressRequired(instruction.opcode)
+                throw InstructionError.encodingAddressRequired(instruction.opcode)
             }
             return Word(instruction.opcode.metadata.baseWord + address.rawValue)
         case .input, .output:
@@ -68,7 +59,7 @@ public struct InstructionWord: Equatable, Sendable {
             return Word.zero
         case .data:
             guard case let .literal(value) = instruction.operand else {
-                throw InstructionEncodingError.literalRequired(instruction.opcode)
+                throw InstructionError.encodingLiteralRequired(instruction.opcode)
             }
             return try numericPolicy.word(fromSigned: value)
         }

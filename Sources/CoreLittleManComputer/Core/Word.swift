@@ -1,4 +1,4 @@
-public struct Word: Equatable, Hashable, Sendable, Codable {
+public struct Word: Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
     public static let digits = 3
     public static let zero = Word(0)
 
@@ -6,6 +6,11 @@ public struct Word: Equatable, Hashable, Sendable, Codable {
 
     public init(_ rawValue: Int) {
         precondition(LMCConstants.wordRange.contains(rawValue), "Word must be within 0...999")
+        self.rawValue = rawValue
+    }
+
+    public init?(exactly rawValue: Int) {
+        guard LMCConstants.wordRange.contains(rawValue) else { return nil }
         self.rawValue = rawValue
     }
 
@@ -18,21 +23,32 @@ public struct Word: Equatable, Hashable, Sendable, Codable {
         }
     }
 
+    public init?(signedExactly value: Int) {
+        guard LMCConstants.signedWordRange.contains(value) else { return nil }
+        if value >= 0 {
+            self.rawValue = value
+        } else {
+            self.rawValue = LMCConstants.decimalBase + value
+        }
+    }
+
     public var signedValue: Int {
         rawValue <= LMCConstants.signedWordRange.upperBound ? rawValue : rawValue - LMCConstants.decimalBase
     }
 
+    public var description: String { zeroPaddedString }
+
     public var zeroPaddedString: String {
-        let description = String(rawValue)
-        guard description.count < Self.digits else { return description }
-        return String(repeating: "0", count: Self.digits - description.count) + description
+        let formatted = String(rawValue)
+        guard formatted.count < Self.digits else { return formatted }
+        return String(repeating: "0", count: Self.digits - formatted.count) + formatted
     }
 
-    public func highOrderDigit() -> Int {
+    public var highDigit: Int {
         rawValue / 100
     }
 
-    public func lowOrderValue() -> Int {
+    public var lowValue: Int {
         rawValue % 100
     }
 

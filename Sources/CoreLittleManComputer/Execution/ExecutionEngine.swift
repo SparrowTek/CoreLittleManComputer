@@ -1,10 +1,32 @@
-public enum ExecutionError: Error, Sendable, Equatable {
+import Foundation
+
+public enum ExecutionError: Error, Sendable, Equatable, CustomStringConvertible {
     case halted
     case awaitingInput
     case mailboxOutOfBounds(MailboxAddress)
     case invalidInstruction(Word)
     case numericError(NumericError)
     case breakpointHit(MailboxAddress)
+    case programCounterOverflow
+
+    public var description: String {
+        switch self {
+        case .halted:
+            return "Program is halted"
+        case .awaitingInput:
+            return "Program is waiting for input"
+        case .mailboxOutOfBounds(let address):
+            return "Mailbox address \(address.rawValue) is out of bounds"
+        case .invalidInstruction(let word):
+            return "Invalid instruction at word \(word)"
+        case .numericError(let error):
+            return "Numeric error: \(error)"
+        case .breakpointHit(let address):
+            return "Breakpoint hit at address \(address.rawValue)"
+        case .programCounterOverflow:
+            return "Program counter advanced past the end of memory"
+        }
+    }
 }
 
 public enum ExecutionSchedule: Sendable {
@@ -41,10 +63,20 @@ public final class ExecutionEngine: @unchecked Sendable {
     private var inboxBox: InboxBox?
     private var outboxBox: OutboxBox?
     private var breakpoints: Set<MailboxAddress>
-    private let eventStream: AsyncStream<ExecutionEvent>
-    private let eventContinuation: AsyncStream<ExecutionEvent>.Continuation
+    private var eventContinuations: [UUID: AsyncStream<ExecutionEvent>.Continuation] = [:]
+    #if DEBUG
+    private var isExecuting = false
+    #endif
 
-    public var events: AsyncStream<ExecutionEvent> { eventStream }
+    public func subscribe() -> AsyncStream<ExecutionEvent> {
+        let id = UUID()
+        let (stream, continuation) = AsyncStream<ExecutionEvent>.makeStream()
+        eventContinuations[id] = continuation
+        continuation.onTermination = { [weak self] _ in
+            self?.eventContinuations.removeValue(forKey: id)
+        }
+        return stream
+    }
 
     public init(program: Program,
                 initialState: ProgramState = ProgramState(),
@@ -54,9 +86,6 @@ public final class ExecutionEngine: @unchecked Sendable {
                 outboxConsumer: (any OutboxConsuming)? = nil,
                 breakpoints: Set<MailboxAddress> = []) {
         self.program = program
-        let pair = AsyncStream<ExecutionEvent>.makeStream()
-        self.eventStream = pair.stream
-        self.eventContinuation = pair.continuation
         var workingState = initialState
         workingState.ensureMemoryInitialized(with: program.memoryImage)
         self.state = workingState
@@ -76,7 +105,15 @@ public final class ExecutionEngine: @unchecked Sendable {
     }
 
     deinit {
-        eventContinuation.finish()
+        for continuation in eventContinuations.values {
+            continuation.finish()
+        }
+    }
+
+    public func reset(initialState: ProgramState = ProgramState()) {
+        var workingState = initialState
+        workingState.ensureMemoryInitialized(with: program.memoryImage)
+        self.state = workingState
     }
 
     public func setInboxProvider(_ provider: some InboxProviding) {
@@ -144,6 +181,12 @@ public final class ExecutionEngine: @unchecked Sendable {
     }
 
     public func step() throws {
+        #if DEBUG
+        precondition(!isExecuting, "ExecutionEngine.step() called re-entrantly — this indicates concurrent access or a re-entrant observer")
+        isExecuting = true
+        defer { isExecuting = false }
+        #endif
+
         guard !state.halted else {
             throw ExecutionError.halted
         }
@@ -203,7 +246,7 @@ public final class ExecutionEngine: @unchecked Sendable {
         case .input:
             try input()
         case .output:
-            output()
+            try output()
         case .halt:
             halt()
         case .data:
@@ -221,7 +264,7 @@ public final class ExecutionEngine: @unchecked Sendable {
             state.setHalted()
             throw ExecutionError.numericError(error)
         }
-        state.incrementCounter()
+        try state.incrementCounter()
     }
 
     private func subtract(from instruction: Instruction) throws {
@@ -234,20 +277,20 @@ public final class ExecutionEngine: @unchecked Sendable {
             state.setHalted()
             throw ExecutionError.numericError(error)
         }
-        state.incrementCounter()
+        try state.incrementCounter()
     }
 
     private func store(from instruction: Instruction) throws {
         let address = try operandAddress(from: instruction)
         try writeAccumulator(to: address)
-        state.incrementCounter()
+        try state.incrementCounter()
     }
 
     private func load(from instruction: Instruction) throws {
         let address = try operandAddress(from: instruction)
         let word = state.word(at: address)
         state.updateAccumulator(Accumulator(word.signedValue))
-        state.incrementCounter()
+        try state.incrementCounter()
     }
 
     private func branch(to instruction: Instruction) throws {
@@ -259,7 +302,7 @@ public final class ExecutionEngine: @unchecked Sendable {
         if state.accumulator.value == 0 {
             try branch(to: instruction)
         } else {
-            state.incrementCounter()
+            try state.incrementCounter()
         }
     }
 
@@ -267,7 +310,7 @@ public final class ExecutionEngine: @unchecked Sendable {
         if state.accumulator.value >= 0 {
             try branch(to: instruction)
         } else {
-            state.incrementCounter()
+            try state.incrementCounter()
         }
     }
 
@@ -288,7 +331,7 @@ public final class ExecutionEngine: @unchecked Sendable {
         }
     }
 
-    private func output() {
+    private func output() throws {
         let value = state.accumulator.value
         state.emitOutput(value)
         if var box = outboxBox {
@@ -296,7 +339,7 @@ public final class ExecutionEngine: @unchecked Sendable {
             outboxBox = box
         }
         emit(.outputProduced(value))
-        state.incrementCounter()
+        try state.incrementCounter()
     }
 
     private func halt() {
@@ -333,12 +376,15 @@ public final class ExecutionEngine: @unchecked Sendable {
             state.setHalted()
             throw ExecutionError.numericError(error)
         }
-        state.incrementCounter()
+        try state.incrementCounter()
     }
 
     private func emit(_ event: ExecutionEvent) {
         observer.handle(event)
-        eventContinuation.yield(event)
+        let continuations = Array(eventContinuations.values)
+        for continuation in continuations {
+            continuation.yield(event)
+        }
     }
 }
 
@@ -357,4 +403,3 @@ private struct OutboxBox: Sendable {
         consumer.enqueue(value)
     }
 }
-import Foundation

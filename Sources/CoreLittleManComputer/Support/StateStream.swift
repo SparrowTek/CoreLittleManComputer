@@ -9,8 +9,9 @@ public extension ExecutionEngine {
                 continuation.yield(state)
             }
 
+            let eventStream = subscribe()
             let task = Task {
-                for await event in events {
+                for await event in eventStream {
                     switch event {
                     case .cycleCompleted(_, let snapshot):
                         continuation.yield(snapshot)

@@ -1,9 +1,20 @@
 import Foundation
 
-public enum ProgramSerializationError: Error, Sendable {
-    case decodingFailure(Error)
-    case encodingFailure(Error)
+public enum ProgramSerializationError: Error, Sendable, Equatable, CustomStringConvertible {
+    case decodingFailure(String)
+    case encodingFailure(String)
     case snapshot(SnapshotError)
+
+    public var description: String {
+        switch self {
+        case .decodingFailure(let message):
+            return "Decoding failure: \(message)"
+        case .encodingFailure(let message):
+            return "Encoding failure: \(message)"
+        case .snapshot(let error):
+            return "Snapshot error: \(error)"
+        }
+    }
 }
 
 public struct ProgramSerializer: Sendable {
@@ -25,7 +36,7 @@ public struct ProgramSerializer: Sendable {
         do {
             return try encoder.encode(snapshot)
         } catch {
-            throw ProgramSerializationError.encodingFailure(error)
+            throw ProgramSerializationError.encodingFailure(String(describing: error))
         }
     }
 
@@ -39,7 +50,7 @@ public struct ProgramSerializer: Sendable {
         } catch let error as SnapshotError {
             throw ProgramSerializationError.snapshot(error)
         } catch {
-            throw ProgramSerializationError.decodingFailure(error)
+            throw ProgramSerializationError.decodingFailure(String(describing: error))
         }
     }
 }
@@ -73,7 +84,7 @@ public struct ProgramStateSerializer: Sendable {
         } catch let error as SnapshotError {
             throw ProgramSerializationError.snapshot(error)
         } catch {
-            throw ProgramSerializationError.decodingFailure(error)
+            throw ProgramSerializationError.decodingFailure(String(describing: error))
         }
     }
 }

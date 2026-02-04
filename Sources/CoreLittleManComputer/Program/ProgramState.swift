@@ -50,9 +50,11 @@ public struct ProgramState: Sendable {
         counter = address
     }
 
-    public mutating func incrementCounter() {
+    public mutating func incrementCounter() throws {
         let next = counter.rawValue + 1
-        precondition(MailboxAddress.validRange.contains(next), "Program counter advanced out of bounds")
+        guard MailboxAddress.validRange.contains(next) else {
+            throw ExecutionError.programCounterOverflow
+        }
         counter = MailboxAddress(next)
     }
 
