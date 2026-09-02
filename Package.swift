@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 
 import PackageDescription
 
@@ -6,21 +6,26 @@ let package = Package(
     name: "CoreLittleManComputer",
     platforms: [
         .iOS(.v17),
-        .macCatalyst(.v17),
         .macOS(.v14),
-        .watchOS(.v9),
-        .tvOS(.v16),
+        .macCatalyst(.v17),
+        .watchOS(.v10),
+        .tvOS(.v17),
+        .visionOS(.v1),
     ],
     products: [
         .library(
             name: "CoreLittleManComputer",
-            targets: ["CoreLittleManComputer"]),
+            targets: ["CoreLittleManComputer"]
+        ),
     ],
     targets: [
         .target(
-            name: "CoreLittleManComputer"),
+            name: "CoreLittleManComputer"
+        ),
         .testTarget(
             name: "CoreLittleManComputerTests",
-            dependencies: ["CoreLittleManComputer"]),
-    ]
+            dependencies: ["CoreLittleManComputer"]
+        ),
+    ],
+    swiftLanguageModes: [.v6]
 )

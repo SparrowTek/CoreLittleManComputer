@@ -1,0 +1,12 @@
+// Reads two values and outputs the first minus the second.
+// Inputs: 8, 5   Outputs: 3
+       INP
+       STA FIRST
+       INP
+       STA SECOND
+       LDA FIRST
+       SUB SECOND
+       OUT
+       HLT
+FIRST  DAT
+SECOND DAT

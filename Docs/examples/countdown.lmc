@@ -1,0 +1,10 @@
+// Counts down from the input to zero, outputting every value.
+// Inputs: 3   Outputs: 3, 2, 1, 0
+     INP
+     OUT      // Initialize output
+LOOP BRZ QUIT // If the accumulator value is 0, jump to QUIT
+     SUB ONE  // Subtract the value stored at address ONE from the accumulator
+     OUT
+     BRA LOOP // Jump (unconditionally) to LOOP
+QUIT HLT
+ONE  DAT 1    // Store the value 1 in this mailbox and label it ONE

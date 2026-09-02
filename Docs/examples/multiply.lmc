@@ -1,0 +1,21 @@
+// Multiplies two values by repeated addition.
+// Inputs: 3, 4   Outputs: 12
+       INP
+       STA A
+       INP
+       STA B
+LOOP   LDA B
+       BRZ DONE
+       SUB ONE
+       STA B
+       LDA RESULT
+       ADD A
+       STA RESULT
+       BRA LOOP
+DONE   LDA RESULT
+       OUT
+       HLT
+A      DAT
+B      DAT
+RESULT DAT
+ONE    DAT 1

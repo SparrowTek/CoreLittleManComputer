@@ -1,85 +1,124 @@
-#if canImport(Testing)
 import Testing
 @testable import CoreLittleManComputer
 
-@Suite("Instructions")
-struct InstructionTests {
-
-    @Test func encoding_and_decoding_round_trip() throws {
-        let address = MailboxAddress(23)
-        let instruction = try Instruction(opcode: .add, operand: .address(address))
-        let encoded = try InstructionWord.encode(instruction)
-        #expect(encoded.rawValue == 123)
-
-        let decoded = try InstructionWord(encoded).decode()
-        guard case let .instruction(decodedInstruction) = decoded else {
-            Issue.record("expected instruction")
-            return
-        }
-        #expect(decodedInstruction == instruction)
+@Suite("Opcode")
+struct OpcodeTests {
+    @Test func coversTheTenOperations() {
+        #expect(Opcode.allCases.count == 10)
+        #expect(Opcode.allCases.map(\.mnemonic) == ["ADD", "SUB", "STA", "LDA", "BRA", "BRZ", "BRP", "INP", "OUT", "HLT"])
     }
 
-    @Test func decoding_of_literals() throws {
-        let literalWord = Word(signedValue: -1)
-        let decoded = try InstructionWord(literalWord).decode()
-        guard case let .data(word) = decoded else {
-            Issue.record("expected data literal")
-            return
-        }
-        #expect(word == literalWord)
-
-        let dataInstruction = try Instruction(opcode: .data, operand: .literal(-1))
-        let encoded = try InstructionWord.encode(dataInstruction)
-        #expect(encoded.rawValue == 999)
+    @Test func knowsWhichOperationsAddressAMailbox() {
+        let addressed = Opcode.allCases.filter(\.takesAddress)
+        #expect(addressed == [.add, .subtract, .store, .load, .branchAlways, .branchIfZero, .branchIfPositive])
     }
 
-    @Test func all_opcodes_encode_and_decode() throws {
-        let addressOpcodes: [Opcode] = [.add, .subtract, .store, .load, .branch, .branchIfZero, .branchIfPositive]
-        for opcode in addressOpcodes {
-            let instruction = try Instruction(opcode: opcode, operand: .address(MailboxAddress(50)))
-            let word = try InstructionWord.encode(instruction)
-            let decoded = try InstructionWord(word).decode()
-            guard case let .instruction(result) = decoded else {
-                Issue.record("Expected instruction for \(opcode)")
-                continue
-            }
-            #expect(result == instruction)
-        }
+    @Test func encodesBaseWords() {
+        #expect(Opcode.add.baseWord == 100)
+        #expect(Opcode.subtract.baseWord == 200)
+        #expect(Opcode.store.baseWord == 300)
+        #expect(Opcode.load.baseWord == 500)
+        #expect(Opcode.branchAlways.baseWord == 600)
+        #expect(Opcode.branchIfZero.baseWord == 700)
+        #expect(Opcode.branchIfPositive.baseWord == 800)
+        #expect(Opcode.input.baseWord == 901)
+        #expect(Opcode.output.baseWord == 902)
+        #expect(Opcode.halt.baseWord == .zero)
     }
 
-    @Test func noOperand_opcodes_reject_operands() {
-        #expect(throws: InstructionError.self) {
-            try Instruction(opcode: .halt, operand: .address(MailboxAddress(0)))
-        }
-        #expect(throws: InstructionError.self) {
-            try Instruction(opcode: .input, operand: .address(MailboxAddress(0)))
-        }
+    @Test func offersTheWikipediaAliases() {
+        #expect(Opcode.store.aliases == ["STO"])
+        #expect(Opcode.halt.aliases == ["COB"])
+        #expect(Opcode.add.aliases.isEmpty)
     }
 
-    @Test func address_opcodes_reject_missing_operand() {
-        #expect(throws: InstructionError.self) {
-            try Instruction(opcode: .add, operand: .none)
-        }
-    }
-
-    @Test func instruction_description() throws {
-        let add = try Instruction(opcode: .add, operand: .address(MailboxAddress(5)))
-        #expect(add.description == "ADD 5")
-
-        let halt = try Instruction(opcode: .halt)
-        #expect(halt.description == "HLT")
-
-        let dat = try Instruction(opcode: .data, operand: .literal(42))
-        #expect(dat.description == "DAT 42")
-    }
-
-    @Test func opcode_4xx_decoded_as_data() throws {
-        let word = Word(400)
-        let decoded = try InstructionWord(word).decode()
-        guard case .data = decoded else {
-            Issue.record("Expected 4xx to decode as data")
-            return
+    @Test func summarisesEveryOperation() {
+        for opcode in Opcode.allCases {
+            #expect(!opcode.summary.isEmpty)
         }
     }
 }
-#endif
+
+@Suite("Instruction")
+struct InstructionTests {
+    @Test func decodesCanonicalWords() {
+        #expect(Instruction(word: 105) == .add(5))
+        #expect(Instruction(word: 299) == .subtract(99))
+        #expect(Instruction(word: 300) == .store(0))
+        #expect(Instruction(word: 542) == .load(42))
+        #expect(Instruction(word: 600) == .branchAlways(0))
+        #expect(Instruction(word: 715) == .branchIfZero(15))
+        #expect(Instruction(word: 899) == .branchIfPositive(99))
+        #expect(Instruction(word: 901) == .input)
+        #expect(Instruction(word: 902) == .output)
+        #expect(Instruction(word: .zero) == .halt)
+    }
+
+    @Test func anyWordBelowOneHundredHalts() {
+        for value in 0..<100 {
+            #expect(Instruction(word: Word(wrapping: value)) == .halt)
+        }
+    }
+
+    @Test func fourHundredsAreNotInstructions() {
+        for value in 400...499 {
+            #expect(Instruction(word: Word(wrapping: value)) == nil)
+        }
+    }
+
+    @Test func onlyInputAndOutputExistInTheNineHundreds() {
+        for value in 900...999 {
+            let instruction = Instruction(word: Word(wrapping: value))
+            switch value {
+            case 901: #expect(instruction == .input)
+            case 902: #expect(instruction == .output)
+            default: #expect(instruction == nil)
+            }
+        }
+    }
+
+    @Test func decodesExactlyEightHundredAndTwoWords() {
+        let decodable = Word.range.filter { Instruction(word: Word(wrapping: $0)) != nil }
+        #expect(decodable.count == 802)
+    }
+
+    @Test func canonicalWordsRoundTrip() {
+        for value in Word.range {
+            let word = Word(wrapping: value)
+            guard let instruction = Instruction(word: word) else { continue }
+            if word.hundredsDigit == 0 {
+                #expect(instruction.word == .zero)
+            } else {
+                #expect(instruction.word == word)
+            }
+        }
+    }
+
+    @Test func pairsOpcodesWithAddresses() {
+        #expect(Instruction(opcode: .add, address: 7) == .add(7))
+        #expect(Instruction(opcode: .halt, address: nil) == .halt)
+        #expect(Instruction(opcode: .add, address: nil) == nil)
+        #expect(Instruction(opcode: .halt, address: 7) == nil)
+        for opcode in Opcode.allCases {
+            let address: MailboxAddress? = opcode.takesAddress ? 12 : nil
+            let instruction = Instruction(opcode: opcode, address: address)
+            #expect(instruction?.opcode == opcode)
+            #expect(instruction?.address == address)
+        }
+    }
+
+    @Test func identifiesBranches() {
+        #expect(Instruction.branchAlways(0).isBranch)
+        #expect(Instruction.branchIfZero(0).isBranch)
+        #expect(Instruction.branchIfPositive(0).isBranch)
+        #expect(!Instruction.add(0).isBranch)
+        #expect(!Instruction.halt.isBranch)
+    }
+
+    @Test func describesItselfAsAssembly() {
+        #expect(Instruction.add(5).description == "ADD 05")
+        #expect(Instruction.branchIfPositive(99).description == "BRP 99")
+        #expect(Instruction.input.description == "INP")
+        #expect(Instruction.halt.description == "HLT")
+    }
+}
